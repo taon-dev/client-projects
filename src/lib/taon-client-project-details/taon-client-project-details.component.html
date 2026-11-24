@@ -1,0 +1,48 @@
+<mat-card>
+  @if (loading()) {
+    <mat-progress-spinner
+      diameter="32"
+      mode="indeterminate"></mat-progress-spinner>
+  } @else if (project()) {
+    <mat-card-title class="p-4">{{ project()!.name }}</mat-card-title>
+    <mat-card-content>
+      <p><strong class="font-bold">Status:</strong> {{ project()!.status }}</p>
+      <p class="p-4 bg-white mb-2">{{ project()!.description }}</p>
+      @if (!project()!.acceptedAt && !project()!.archivedAt) {
+        <button
+          mat-stroked-button
+          [routerLink]="['/projects', project()!.id, 'edit']">
+          Edytuj
+        </button>
+      }
+      @if (!project()!.archivedAt) {
+        <button
+          mat-stroked-button
+          (click)="archive()">
+          Archiwizuj
+        </button>
+      }
+      <div>
+        @for (comment of comments(); track comment.id) {
+          <p>
+            <strong>{{ comment.authorType }}</strong
+            >: {{ comment.body }}
+          </p>
+        }
+        <mat-form-field class="w-full mt-2"
+          ><mat-label>Komentarz</mat-label
+          ><textarea
+            class="bg-white"
+            matInput
+            [(ngModel)]="commentDraft"
+            rows="3"></textarea>
+        </mat-form-field>
+        <button
+          mat-stroked-button
+          (click)="sendComment()">
+          Dodaj komentarz
+        </button>
+      </div>
+    </mat-card-content>
+  }
+</mat-card>

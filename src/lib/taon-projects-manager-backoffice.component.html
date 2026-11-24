@@ -1,0 +1,48 @@
+<mat-card>
+  <mat-card-title>List of Projects</mat-card-title>
+  <mat-card-content>
+    <mat-form-field
+      ><mat-label>Wyszukaj</mat-label
+      ><input
+        matInput
+        [(ngModel)]="search"
+    /></mat-form-field>
+    <mat-form-field
+      ><mat-label>Widok</mat-label
+      ><mat-select [(ngModel)]="archived"
+        ><mat-option [value]="false">Aktywne</mat-option
+        ><mat-option [value]="true">Archiwalne</mat-option></mat-select
+      ></mat-form-field
+    >
+    <button
+      mat-stroked-button
+      (click)="refresh()">
+      Odśwież
+    </button>
+    @for (project of filtered(); track project.id) {
+      <div class="py-2">
+        <strong>{{ project.name }}</strong> · {{ project.status }}
+        <a
+          mat-button
+          [routerLink]="['preview', project.id]"
+          >Preview</a
+        >
+        @if (project.archivedAt) {
+          <button
+            mat-button
+            (click)="restore(project)">
+            Restore
+          </button>
+        } @else {
+          <button
+            mat-button
+            (click)="archive(project)">
+            Archive
+          </button>
+        }
+      </div>
+    } @empty {
+      <p>Brak projektów.</p>
+    }
+  </mat-card-content>
+</mat-card>

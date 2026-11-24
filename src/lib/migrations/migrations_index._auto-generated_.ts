@@ -2,4 +2,5 @@
 
 // THIS FILE IS GENERATED - DO NOT MODIFY
 export const MIGRATIONS_CLASSES_FOR_ClientProjectsContext = {};
+export const MIGRATIONS_CLASSES_FOR_TaonClientProjectsAbstractContext = {};
 // THIS FILE IS GENERATED - DO NOT MODIFY
