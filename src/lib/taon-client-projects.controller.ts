@@ -15,6 +15,8 @@ import {
 import {
   TaonAuthContextRepository,
   TaonSessionRepository,
+  TaonSessionUserEntity,
+  TaonSessionUserIdentityEntity,
 } from '@taon-dev/session/src';
 
 import { TaonClientProjectStatus } from './taon-client-project-status';
@@ -22,6 +24,7 @@ import { TaonClientProjectsEntity } from './taon-client-projects.entity';
 import { TaonClientProjectCommentEntity } from './taon-client-project-comment.entity';
 import { TaonClientProjectStatusHistoryEntity } from './taon-client-project-status-history.entity';
 import { TaonClientProjectActivityEntity } from './taon-client-project-activity.entity';
+import { TaonClientProjectAdministratorEntity } from './taon-client-project-administrator.entity';
 
 interface ProjectInput {
   name?: string;
@@ -29,6 +32,11 @@ interface ProjectInput {
   description?: string;
   budgetAmount?: number | null;
   budgetCurrency?: string;
+}
+
+interface AssignmentInput {
+  projectId: number;
+  administratorIds: number[];
 }
 
 interface CommentInput {
@@ -52,6 +60,15 @@ interface CommentInput {
     'editComment',
     'deleteComment',
     'markRead',
+    'assignments',
+    'administrators',
+    'assignAdministrators',
+    'activities',
+    'statusHistory',
+    'unreadCount',
+    'markUnread',
+    'activityFeed',
+    'markAllRead',
   ],
 })
 export class TaonClientProjectsController extends TaonBaseCrudController<TaonClientProjectsEntity> {
@@ -69,10 +86,12 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
   ) {
     await this.session.throwIfNotAuthenticated({ req });
     const context = await this.auth.getContext(req.userId, req.sessionId);
+    const isSuperUser = !!context?.isSuperUser;
     return {
       id: Number(req.userId),
+      isSuperUser,
       isAdmin:
-        !!context?.isSuperUser ||
+        isSuperUser ||
         !!context?.hasAccess?.toManageCms ||
         !!context?.hasAccess?.toManageUsers,
     };
@@ -82,6 +101,7 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
     projectId: number,
     userId: number,
     isAdmin: boolean,
+    isSuperUser = false,
   ) {
     const project = await this.repository(TaonClientProjectsEntity).findOne({
       where: { id: projectId },
@@ -98,6 +118,17 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
         message: 'Project access denied.',
       });
     }
+    if (isAdmin && !isSuperUser && project.clientId !== userId) {
+      const assignments = await this.repository(TaonClientProjectAdministratorEntity).find({
+        where: { projectId },
+      });
+      if (assignments.length > 0 && !assignments.some(a => a.administratorId === userId)) {
+        Taon.error({
+          status: getStatusCode(HttpStatusEnum.FORBIDDEN),
+          message: 'Project access denied.',
+        });
+      }
+    }
     return project;
   }
 
@@ -110,7 +141,7 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
       const current = await this.user(req);
       const isArchived = String(archived) === 'true';
       const repo = this.repository(TaonClientProjectsEntity);
-      return repo.find({
+      const projects = await repo.find({
         where: current.isAdmin
           ? isArchived
             ? { archivedAt: {} as any }
@@ -119,7 +150,24 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
             ? ({ clientId: current.id, archivedAt: {} as any } as any)
             : ({ clientId: current.id, archivedAt: null } as any),
         order: { updatedAt: 'DESC' },
-      }) as any;
+      });
+      if (!current.isAdmin || current.isSuperUser) return projects as any;
+
+      const assignmentRepo = this.repository(TaonClientProjectAdministratorEntity);
+      const result: any[] = [];
+      for (const project of projects) {
+        const assignments = await assignmentRepo.find({ where: { projectId: project.id } });
+        if (assignments.length === 0 || assignments.some(a => a.administratorId === current.id)) {
+          result.push(project);
+          continue;
+        }
+        result.push({
+          id: project.id,
+          name: project.name,
+          restricted: true,
+        });
+      }
+      return result as any;
     };
     //#endregion
   }
@@ -133,6 +181,7 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
         Number(id),
         current.id,
         current.isAdmin,
+        current.isSuperUser,
       ) as any;
     };
     //#endregion
@@ -189,6 +238,7 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
         Number(id),
         current.id,
         current.isAdmin,
+        current.isSuperUser,
       );
       if (!current.isAdmin && project.acceptedAt) {
         Taon.error({
@@ -240,6 +290,7 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
         Number(id),
         current.id,
         current.isAdmin,
+        current.isSuperUser,
       );
       project.archivedAt = new Date();
       project.archivedBy = current.id;
@@ -262,7 +313,7 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
           status: getStatusCode(HttpStatusEnum.FORBIDDEN),
           message: 'Only administrators can restore projects.',
         });
-      const project = await this.requireProject(Number(id), current.id, true);
+      const project = await this.requireProject(Number(id), current.id, true, current.isSuperUser);
       project.archivedAt = null;
       project.archivedBy = null;
       const saved = await this.repository(TaonClientProjectsEntity).save(
@@ -281,7 +332,7 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
     //#region @websqlFunc
     return async req => {
       const current = await this.user(req);
-      await this.requireProject(Number(projectId), current.id, current.isAdmin);
+      await this.requireProject(Number(projectId), current.id, current.isAdmin, current.isSuperUser);
       return this.repository(TaonClientProjectCommentEntity).find({
         where: { projectId: Number(projectId), deletedAt: null },
         order: { createdAt: 'ASC' },
@@ -437,15 +488,198 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
     //#endregion
   }
 
+  @GET()
+  administrators(): Taon.Response<any[]> {
+    //#region @websqlFunc
+    return async req => {
+      const current = await this.user(req);
+      if (!current.isSuperUser)
+        Taon.error({ status: getStatusCode(HttpStatusEnum.FORBIDDEN), message: 'Only superusers can list administrators.' });
+      const users = await this.repository(TaonSessionUserEntity).find({ relations: { identities: true } });
+      const result: any[] = [];
+      for (const user of users) {
+        const context = await this.auth.getContext(user.id, req.sessionId);
+        if (!context?.isSuperUser && !context?.hasAccess?.toManageCms && !context?.hasAccess?.toManageUsers) continue;
+        const identity = (user.identities || []).find((item: any) => item.email);
+        result.push({
+          id: user.id,
+          firstName: (user as any).firstName || null,
+          lastName: (user as any).lastName || null,
+          email: identity?.email || null,
+        });
+      }
+      return result as any;
+    };
+    //#endregion
+  }
+
+  @GET()
+  assignments(@Query('projectId') projectId: number): Taon.Response<TaonClientProjectAdministratorEntity[]> {
+    //#region @websqlFunc
+    return async req => {
+      const current = await this.user(req);
+      await this.requireProject(Number(projectId), current.id, current.isAdmin, current.isSuperUser);
+      if (!current.isSuperUser)
+        Taon.error({ status: getStatusCode(HttpStatusEnum.FORBIDDEN), message: 'Only superusers can view project assignments.' });
+      return this.repository(TaonClientProjectAdministratorEntity).find({
+        where: { projectId: Number(projectId) },
+        order: { createdAt: 'ASC' },
+      }) as any;
+    };
+    //#endregion
+  }
+
+  @POST()
+  assignAdministrators(@Body() input: AssignmentInput): Taon.Response<TaonClientProjectAdministratorEntity[]> {
+    //#region @websqlFunc
+    return async req => {
+      const current = await this.user(req);
+      if (!current.isSuperUser)
+        Taon.error({ status: getStatusCode(HttpStatusEnum.FORBIDDEN), message: 'Only superusers can assign project administrators.' });
+      await this.requireProject(Number(input.projectId), current.id, true, true);
+      const repo = this.repository(TaonClientProjectAdministratorEntity);
+      await repo.delete({ projectId: Number(input.projectId) } as any);
+      const ids = Array.from(new Set((input.administratorIds || []).map(Number).filter(Boolean)));
+      const assignments = await Promise.all(ids.map(administratorId => repo.save(repo.create({
+        projectId: Number(input.projectId),
+        administratorId,
+        assignedBy: current.id,
+      }))));
+      await this.createActivity(Number(input.projectId), current.id, 'assignment');
+      return assignments as any;
+    };
+    //#endregion
+  }
+
+  @GET()
+  activities(@Query('projectId') projectId: number): Taon.Response<TaonClientProjectActivityEntity[]> {
+    //#region @websqlFunc
+    return async req => {
+      const current = await this.user(req);
+      await this.requireProject(Number(projectId), current.id, current.isAdmin, current.isSuperUser);
+      return this.repository(TaonClientProjectActivityEntity).find({
+        where: { projectId: Number(projectId), userId: current.id },
+        order: { createdAt: 'DESC' },
+      }) as any;
+    };
+    //#endregion
+  }
+
+  @GET()
+  statusHistory(@Query('projectId') projectId: number): Taon.Response<TaonClientProjectStatusHistoryEntity[]> {
+    //#region @websqlFunc
+    return async req => {
+      const current = await this.user(req);
+      await this.requireProject(Number(projectId), current.id, current.isAdmin, current.isSuperUser);
+      return this.repository(TaonClientProjectStatusHistoryEntity).find({
+        where: { projectId: Number(projectId) },
+        order: { createdAt: 'ASC' },
+      }) as any;
+    };
+    //#endregion
+  }
+
+  @GET()
+  activityFeed(@Query('page') page?: number, @Query('pageSize') pageSize?: number): Taon.Response<TaonClientProjectActivityEntity[]> {
+    //#region @websqlFunc
+    return async req => {
+      const current = await this.user(req);
+      const size = Math.min(Math.max(Number(pageSize) || 20, 1), 100);
+      const offset = (Math.max(Number(page) || 1, 1) - 1) * size;
+      const activities = await this.repository(TaonClientProjectActivityEntity).find({
+        where: { userId: current.id },
+        order: { createdAt: 'DESC' },
+        skip: offset,
+        take: size,
+      });
+      const authorized: TaonClientProjectActivityEntity[] = [];
+      for (const activity of activities) {
+        const project = await this.repository(TaonClientProjectsEntity).findOne({ where: { id: activity.projectId } });
+        if (!project) continue;
+        if (!current.isAdmin && project.clientId !== current.id) continue;
+        if (current.isAdmin && !current.isSuperUser && project.clientId !== current.id) {
+          const assignments = await this.repository(TaonClientProjectAdministratorEntity).find({ where: { projectId: project.id } });
+          if (assignments.length > 0 && !assignments.some(a => a.administratorId === current.id)) continue;
+        }
+        authorized.push(activity as any);
+      }
+      return authorized as any;
+    };
+    //#endregion
+  }
+
+  @POST()
+  markAllRead(): Taon.Response<boolean> {
+    //#region @websqlFunc
+    return async req => {
+      const current = await this.user(req);
+      await this.repository(TaonClientProjectActivityEntity).update(
+        { userId: current.id },
+        { isRead: true, manualUnread: false },
+      );
+      return true;
+    };
+    //#endregion
+  }
+
+  @GET()
+  unreadCount(): Taon.Response<number> {
+    //#region @websqlFunc
+    return async req => {
+      const current = await this.user(req);
+      const activityRepo = this.repository(TaonClientProjectActivityEntity);
+      const activities = await activityRepo.find({ where: { userId: current.id } });
+      let count = 0;
+      for (const activity of activities) {
+        if (activity.manualUnread) {
+          count++;
+          continue;
+        }
+        if (!activity.isRead) {
+          const project = await this.repository(TaonClientProjectsEntity).findOne({ where: { id: activity.projectId } });
+          if (!project) continue;
+          if (!current.isAdmin || current.isSuperUser || project.clientId === current.id) {
+            count++;
+          } else {
+            const assignments = await this.repository(TaonClientProjectAdministratorEntity).find({ where: { projectId: project.id } });
+            if (assignments.length === 0 || assignments.some(a => a.administratorId === current.id)) count++;
+          }
+        }
+      }
+      return count as any;
+    };
+    //#endregion
+  }
+
+  @POST()
+  markUnread(@Query('projectId') projectId: number): Taon.Response<boolean> {
+    //#region @websqlFunc
+    return async req => {
+      const current = await this.user(req);
+      await this.requireProject(Number(projectId), current.id, current.isAdmin, current.isSuperUser);
+      const repo = this.repository(TaonClientProjectActivityEntity);
+      let activity = await repo.findOne({ where: { projectId: Number(projectId), userId: current.id } });
+      if (!activity) {
+        activity = repo.create({ projectId: Number(projectId), userId: current.id, activityType: 'comment', isRead: false, manualUnread: true });
+      } else {
+        activity.manualUnread = true;
+        activity.isRead = false;
+      }
+      await repo.save(activity);
+      return true;
+    };
+    //#endregion
+  }
+
   @POST()
   markRead(@Query('projectId') projectId: number): Taon.Response<boolean> {
     //#region @websqlFunc
     return async req => {
       const current = await this.user(req);
-      await this.requireProject(Number(projectId), current.id, current.isAdmin);
+      await this.requireProject(Number(projectId), current.id, current.isAdmin, current.isSuperUser);
       await this.repository(TaonClientProjectActivityEntity).update(
-        { projectId: Number(projectId), userId: current.id, isRead: false },
-        { isRead: true },
+        { projectId: Number(projectId), userId: current.id },
+        { isRead: true, manualUnread: false },
       );
       return true;
     };
@@ -463,6 +697,7 @@ export class TaonClientProjectsController extends TaonBaseCrudController<TaonCli
         userId,
         activityType,
         isRead: false,
+        manualUnread: false,
       }),
     );
   }

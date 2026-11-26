@@ -6,6 +6,8 @@ import { TaonClientProjectStatusHistoryEntity } from './taon-client-project-stat
 import { TaonClientProjectActivityEntity } from './taon-client-project-activity.entity';
 import { TaonClientProjectAttachmentEntity } from './taon-client-project-attachment.entity';
 import { TaonClientProjectsController } from './taon-client-projects.controller';
+import { TaonClientProjectAdministratorEntity } from './taon-client-project-administrator.entity';
+import { TaonClientProjectAttachmentController } from './taon-client-project-attachment.controller';
 
 export const TaonClientProjectsAbstractContext = createContext(() => ({
   contextName: 'TaonClientProjectsAbstractContext',
@@ -17,6 +19,7 @@ export const TaonClientProjectsAbstractContext = createContext(() => ({
     TaonClientProjectStatusHistoryEntity,
     TaonClientProjectActivityEntity,
     TaonClientProjectAttachmentEntity,
+    TaonClientProjectAdministratorEntity,
   },
-  controllers: { TaonClientProjectsController },
+  controllers: { TaonClientProjectsController, TaonClientProjectAttachmentController },
 }));

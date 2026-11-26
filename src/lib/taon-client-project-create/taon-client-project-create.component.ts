@@ -39,6 +39,7 @@ export class TaonClientProjectCreateComponent {
   private readonly router = inject(Router);
 
   sending = false;
+  readonly pendingFiles = signal<File[]>([]);
 
   readonly form = this.fb.nonNullable.group({
     name: ['', Validators.required],
@@ -48,11 +49,19 @@ export class TaonClientProjectCreateComponent {
     description: ['', [Validators.required, Validators.minLength(10)]],
   });
 
+  selectAttachments(event: Event) {
+    const input = event.target as HTMLInputElement;
+    this.pendingFiles.set(Array.from(input.files || []));
+  }
+
   async submit() {
     if (this.form.invalid) return;
     this.sending = true;
     try {
       const project = await this.api.create(this.form.getRawValue());
+      for (const file of this.pendingFiles()) {
+        await this.api.uploadAttachment(project.id, file);
+      }
       await this.router.navigate(['/projects', project.id]);
     } finally {
       this.sending = false;

@@ -12,16 +12,40 @@
         <button
           mat-stroked-button
           [routerLink]="['/projects', project()!.id, 'edit']">
-          Edytuj
+Edit
         </button>
       }
       @if (!project()!.archivedAt) {
         <button
           mat-stroked-button
           (click)="archive()">
-          Archiwizuj
+Archive
         </button>
       }
+      <button mat-stroked-button (click)="markUnread()">Mark as unread</button>
+      <input type="file" multiple (change)="selectAttachments($event)" />
+      <mat-expansion-panel>
+        <mat-expansion-panel-header>Attachments</mat-expansion-panel-header>
+        @for (attachment of attachments(); track attachment.id) {
+          <div>
+            {{ attachment.fileName }} ({{ attachment.sizeBytes || 0 }} bytes)
+            <a mat-button [href]="'/TaonClientProjectAttachmentController/download?key=' + attachment.storageKey">Download</a>
+            @if (!project()!.acceptedAt) {
+              <button mat-button type="button" (click)="removeAttachment(attachment)">Remove</button>
+            }
+          </div>
+        } @empty {
+          <p>No attachments.</p>
+        }
+      </mat-expansion-panel>
+      <mat-expansion-panel>
+        <mat-expansion-panel-header>Status history</mat-expansion-panel-header>
+        @for (history of statusHistory(); track history.id) {
+          <p>{{ history.previousStatus }} → {{ history.newStatus }}</p>
+        } @empty {
+          <p>No status changes.</p>
+        }
+      </mat-expansion-panel>
       <div>
         @for (comment of comments(); track comment.id) {
           <p>
@@ -29,8 +53,14 @@
             >: {{ comment.body }}
           </p>
         }
+        <mat-form-field class="w-full">
+          <mat-label>Change status</mat-label>
+          <mat-select [(ngModel)]="statusChange">
+            @for (status of statusOptions; track status) { <mat-option [value]="status">{{ status }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
         <mat-form-field class="w-full mt-2"
-          ><mat-label>Komentarz</mat-label
+          ><mat-label>Comment</mat-label
           ><textarea
             class="bg-white"
             matInput
@@ -40,7 +70,7 @@
         <button
           mat-stroked-button
           (click)="sendComment()">
-          Dodaj komentarz
+Add comment
         </button>
       </div>
     </mat-card-content>

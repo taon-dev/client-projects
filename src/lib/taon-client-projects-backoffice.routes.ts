@@ -7,25 +7,12 @@ export const TaonClientProjectsBackofficeRoutes: Routes = [
   {
     path: '',
     pathMatch: 'full',
-    redirectTo: 'messages',
+    redirectTo: 'projects',
   },
-  // {
-  //   path: 'projects',
-  //   loadComponent: () =>
-  //     import('./taon-client-projects-manager/taon-client-projects-manager.component').then(
-  //       m => m.TaonClientProjectsManagerComponent,
-  //     ),
-  // },
-  // adminLazyRoute({
-  //   path: 'projects',
-  //   menuItem: 'Projects',
-  //   icon: 'projects',
-  //   expandable: false,
-  //   loader: () =>
-  //     import('@taon-dev/messenger/src').then(
-  //       m => m.TaonMessengerBackofficeRoutes,
-  //     ),
-  // }),
+  {
+    path: 'projects',
+    loadComponent: () => Promise.resolve(TaonProjectsManagerBackofficeComponent),
+  },
   adminLazyRoute({
     path: 'messages',
     menuItem: 'Messages',

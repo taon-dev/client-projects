@@ -36,13 +36,20 @@ export class TaonClientProjectActivityEntity extends TaonBaseEntity<TaonClientPr
     | 'status-change'
     | 'restored'
     | 'created'
-    | 'archived';
+    | 'archived'
+    | 'assignment';
 
   //#region @websql
   @Index()
   @Column({ type: 'boolean', default: false })
   //#endregion
   isRead: boolean;
+
+  //#region @websql
+  @Index()
+  @Column({ type: 'boolean', default: false })
+  //#endregion
+  manualUnread: boolean;
 
   @CreateDateColumn()
   createdAt: Date;

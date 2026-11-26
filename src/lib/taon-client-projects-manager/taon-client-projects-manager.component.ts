@@ -1,4 +1,6 @@
-import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { catchError, exhaustMap, finalize, of, timer } from 'rxjs';
 import {
   FormsModule,
   ReactiveFormsModule,
@@ -32,32 +34,23 @@ import type { TaonClientProjectsEntity } from '../taon-client-projects.entity';
   templateUrl: './taon-client-projects-manager.component.html',
   providers: [TaonClientProjectsApiService],
 })
-export class TaonClientProjectsManagerComponent implements OnInit, OnDestroy {
+export class TaonClientProjectsManagerComponent implements OnInit {
   private readonly api = inject(TaonClientProjectsApiService);
 
   readonly projects = signal<TaonClientProjectsEntity[]>([]);
 
   readonly loading = signal(true);
 
-  private timer?: ReturnType<typeof setInterval>;
-
-  async ngOnInit() {
-    await this.refresh();
-    this.timer = setInterval(() => void this.refresh(), 5000);
-  }
-
-  ngOnDestroy() {
-    if (this.timer) clearInterval(this.timer);
-  }
-
-  async refresh() {
-    this.loading.set(true);
-    try {
-      const projects = await this.api.list(false);
-      // await Utils.wait(2)
-      this.projects.set(projects);
-    } finally {
-      this.loading.set(false);
-    }
+  ngOnInit() {
+    timer(0, 5000).pipe(
+      exhaustMap(() => {
+        this.loading.set(true);
+        return this.api.list$(false).pipe(
+          catchError(() => of([] as TaonClientProjectsEntity[])),
+          finalize(() => this.loading.set(false)),
+        );
+      }),
+      takeUntilDestroyed(),
+    ).subscribe(projects => this.projects.set(projects));
   }
 }

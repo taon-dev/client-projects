@@ -1,0 +1,18 @@
+<h2 mat-dialog-title>Assign administrators</h2>
+<mat-dialog-content>
+  <p>{{ data.projectName }}</p>
+  <mat-form-field class="w-full"><mat-label>Search administrators</mat-label><input matInput [(ngModel)]="search" /></mat-form-field>
+  @if (loading()) { <mat-progress-spinner diameter="32" mode="indeterminate"></mat-progress-spinner> }
+  @for (administrator of filtered(); track administrator.id) {
+    <div>
+      <mat-checkbox [checked]="selected().includes(administrator.id)" (change)="toggle(administrator.id)">
+        {{ administrator.firstName }} {{ administrator.lastName }} — {{ administrator.email }}
+      </mat-checkbox>
+    </div>
+  }
+  <p>Removing all assignments returns this project to the shared administrator pool.</p>
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cancel()">Cancel</button>
+  <button mat-flat-button type="button" (click)="save()">Save</button>
+</mat-dialog-actions>

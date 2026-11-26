@@ -1,0 +1,21 @@
+<mat-card>
+  <mat-card-title class="p-4">Activity <button mat-button type="button" (click)="markAllRead()">Mark all as read</button></mat-card-title>
+  <mat-card-content>
+    @for (activity of activities(); track activity.id) {
+      <div class="activity-item">
+        <mat-icon>{{ activity.activityType === 'comment' ? 'chat' : 'notifications' }}</mat-icon>
+        <div>
+          <strong>{{ activity.activityType }}</strong>
+          <small>{{ activity.createdAt }}</small>
+          <a mat-button [routerLink]="['/projects', activity.projectId]">Open project</a>
+        </div>
+      </div>
+    } @empty {
+      <p>No activity.</p>
+    }
+    <div class="pagination">
+      <button mat-button type="button" [disabled]="page === 1" (click)="previousPage()">Previous</button>
+      <button mat-button type="button" (click)="nextPage()">Next</button>
+    </div>
+  </mat-card-content>
+</mat-card>

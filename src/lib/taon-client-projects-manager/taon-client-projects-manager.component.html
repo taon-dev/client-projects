@@ -1,6 +1,6 @@
 <mat-card>
   <mat-card-title class="p-4 !flex flex-row items-center gap-3">
-    <span>Projekty</span>
+    <span>Projects</span>
 
     @if (loading()) {
       <mat-progress-spinner
@@ -14,7 +14,7 @@
       mat-flat-button
       class="add-inquiry-button mt-2 mb-4"
       routerLink="/projects/new">
-      Dodaj zapytanie o projekt
+      Add project request
     </button>
 
     @for (project of projects(); track project.id) {
@@ -25,7 +25,7 @@
         <span>{{ project.status }}</span>
       </a>
     } @empty {
-      <p>Brak projektów.</p>
+      <p>No projects.</p>
     }
   </mat-card-content>
 </mat-card>
